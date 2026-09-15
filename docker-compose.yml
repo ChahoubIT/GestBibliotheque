@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # ------------------------------------------------------
+  # Base de données MySQL unique pour l'ensemble du projet
+  # ------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: gestbib-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: gestbib_auth
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - gestbib-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------
+  # Microservice Authentification (JWT & Users)
+  # ------------------------------------------------------
+  auth-service:
+    build:
+      context: ./gestbib-auth-service
+      dockerfile: Dockerfile
+    container_name: gestbib-auth-service
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: gestbib_auth
+      JWT_SECRET: gestbib_secret_key_2026
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gestbib-network
+
+  # ------------------------------------------------------
+  # Microservice Cataloque / Livres
+  # ------------------------------------------------------
+  catalog-service:
+    build:
+      context: ./gestbib-catalog-service
+      dockerfile: Dockerfile
+    container_name: gestbib-catalog-service
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: gestbib_catalog
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gestbib-network
+
+  # ------------------------------------------------------
+  # Microservice Emprunts (Borrow Service)
+  # ------------------------------------------------------
+  borrow-service:
+    build:
+      context: ./gestbib-borrow-service
+      dockerfile: Dockerfile
+    container_name: gestbib-borrow-service
+    restart: always
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: gestbib_borrow
+      AUTH_SERVICE_URL: http://auth-service:3000
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - gestbib-network
+
+  # ------------------------------------------------------
+  # Frontend Application Web (React / Vue / HTML)
+  # ------------------------------------------------------
+  frontend:
+    build:
+      context: ./gestbib-frontend
+      dockerfile: Dockerfile
+    container_name: gestbib-frontend
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - auth-service
+      - catalog-service
+      - borrow-service
+    networks:
+      - gestbib-network
+
+# ------------------------------------------------------
+# Réseau et Volumes partagés
+# ------------------------------------------------------
+networks:
+  gestbib-network:
+    driver: bridge
+
+volumes:
+  db_data:
