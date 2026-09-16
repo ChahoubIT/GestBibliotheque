@@ -1,0 +1,25 @@
+groups:
+  - name: gestbib_resource_alerts
+    rules:
+      # Métrique composite : CPU > 80% (10s) ET RAM > 85% (20s)
+      - alert: HighCpuAndMemoryUsage
+        expr: |
+          (
+            sum(rate(container_cpu_usage_seconds_total{namespace="gestbib", container!=""}[1m])) by (pod, namespace)
+            /
+            sum(kube_pod_container_resource_limits{namespace="gestbib", resource="cpu"}) by (pod, namespace)
+            * 100 > 80
+          )
+          AND on(pod, namespace)
+          (
+            sum(container_memory_working_set_bytes{namespace="gestbib", container!=""}) by (pod, namespace)
+            /
+            sum(kube_pod_container_resource_limits{namespace="gestbib", resource="memory"}) by (pod, namespace)
+            * 100 > 85
+          )
+        for: 20s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alerte critique : Utilisation élevée du CPU et de la RAM sur {{ $labels.pod }}"
+          description: "Le pod {{ $labels.pod }} dépasse 80% de CPU et 85% de RAM de manière soutenue."

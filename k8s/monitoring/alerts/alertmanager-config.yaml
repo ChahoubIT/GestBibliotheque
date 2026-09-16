@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: gestbib
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alertes-gestbib@example.com'
+      smtp_auth_username: 'votre_email@gmail.com'
+      smtp_auth_password: 'votre_mot_de_passe_application'
+
+    route:
+      group_by: ['alertname', 'pod']
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 3h
+      receiver: 'email-notifications'
+
+    receivers:
+      - name: 'email-notifications'
+        email_configs:
+          - to: 'admin-devops@example.com'
+            send_resolved: true
